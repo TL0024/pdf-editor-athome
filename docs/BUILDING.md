@@ -31,7 +31,7 @@ Run `build_release.bat` from the repository root. It performs these steps:
 2. Installs the pinned dependencies in `requirements-release.txt`.
 3. Runs PyInstaller using `PDFeditorAthome.spec`.
 4. Embeds `packaging/assets/pdf-editor-at-home.ico` and Windows v1.0.1 metadata.
-5. Creates `PDFeditorAthome.exe`, the release README and `SHA256SUMS.txt`.
+5. Creates `PDFeditorAthome.exe`, the release README, third-party credits and `SHA256SUMS.txt`.
 6. Creates `PDFeditorAthome-v1.0.1-windows-x64.zip`.
 
 Build output is written under `build`, `dist` and `release`. These directories are excluded from source control.
@@ -41,9 +41,9 @@ Build output is written under `build`, `dist` and `release`. These directories a
 The executable supports two environment variables for automated checks:
 
 - `PDFEDITORATHOME_PORT` selects a non-default local port.
-- `PDFEDITORATHOME_NO_BROWSER=1` prevents automatic browser launch.
+- `PDFEDITORATHOME_NO_BROWSER=1` prevents automatic browser launch and disables browser-lifecycle shutdown.
 
-After building, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke_test_release.ps1`. It starts the packaged executable in a hidden window, disables automatic browser launch, verifies the health endpoint and home page, and then stops the process. API tests cover document import and export behavior; the build script creates the executable checksum.
+After building, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke_test_release.ps1`. It starts the packaged executable in a hidden window, disables automatic browser launch and lifecycle monitoring, verifies the health endpoint and home page, and then stops the process. API tests cover document import, export and browser-session behavior; the build script creates the executable checksum.
 
 ## GitHub release
 

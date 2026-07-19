@@ -2,9 +2,15 @@
 
 ## Starting the application
 
-For the Windows release, extract the release ZIP and run `PDFeditorAthome.exe`. Your default browser opens the editor automatically. Keep the accompanying console window open; closing it stops the application.
+For the Windows release, extract the release ZIP and run `PDFeditorAthome.exe`. Your default browser opens the editor automatically. The accompanying console window stays open while the local editor is running.
 
 For source installations, run `run.bat` or `python app.py`, then open <http://127.0.0.1:5050>.
+
+## Stopping the application
+
+Close the editor's browser tab when you are finished. The local server and its console window stop automatically after the last editor tab closes. If more than one editor tab is open, the server remains available until all of them close. Refreshing the page does not stop the server because a short grace period lets the replacement page reconnect.
+
+If a browser is terminated without sending its close notification, the heartbeat fallback stops the server after approximately 90 seconds. You can always stop it immediately by closing the console window or pressing Ctrl+C there.
 
 ## Opening documents
 

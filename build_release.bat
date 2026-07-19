@@ -27,12 +27,13 @@ if not exist "release" mkdir "release"
 if not exist "%RELEASE_DIR%" mkdir "%RELEASE_DIR%"
 copy /y "dist\PDFeditorAthome.exe" "%RELEASE_DIR%\PDFeditorAthome.exe" >nul
 copy /y "packaging\RELEASE_README.txt" "%RELEASE_DIR%\README.txt" >nul
+copy /y "docs\THIRD_PARTY.md" "%RELEASE_DIR%\THIRD_PARTY.md" >nul
 
 powershell -NoProfile -Command "$h = (Get-FileHash -Algorithm SHA256 -LiteralPath '%RELEASE_DIR%\PDFeditorAthome.exe').Hash.ToLowerInvariant(); Set-Content -LiteralPath '%RELEASE_DIR%\SHA256SUMS.txt' -Value ($h + '  PDFeditorAthome.exe') -Encoding ascii"
 if errorlevel 1 goto :error
 
 echo Creating release archive...
-powershell -NoProfile -Command "Compress-Archive -Path '%RELEASE_DIR%\PDFeditorAthome.exe','%RELEASE_DIR%\README.txt','%RELEASE_DIR%\SHA256SUMS.txt' -DestinationPath '%RELEASE_ZIP%' -Force"
+powershell -NoProfile -Command "Compress-Archive -Path '%RELEASE_DIR%\PDFeditorAthome.exe','%RELEASE_DIR%\README.txt','%RELEASE_DIR%\THIRD_PARTY.md','%RELEASE_DIR%\SHA256SUMS.txt' -DestinationPath '%RELEASE_ZIP%' -Force"
 if errorlevel 1 goto :error
 
 echo.

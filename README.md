@@ -18,7 +18,7 @@ PDFeditorAthome is a local-first document editor for Windows. It opens PDF, DOCX
 
 ## Windows release
 
-Download the latest package from [GitHub Releases](https://github.com/TL0024/pdf-editor-athome/releases). Extract the ZIP, double-click `PDFeditorAthome.exe`, and keep its console window open while using the editor. Close the console window to stop the local server.
+Download the latest package from [GitHub Releases](https://github.com/TL0024/pdf-editor-athome/releases). Extract the ZIP and double-click `PDFeditorAthome.exe`; the editor opens in your default browser. Closing the last editor tab also stops the local server and closes its console window. You can still close the console directly to stop the app.
 
 The packaged application supports 64-bit Windows 10 and Windows 11 and does not require Python. The v1.0.1 executable is not Authenticode code-signed, so Windows may display an unknown-publisher warning. Verify the executable against the included `SHA256SUMS.txt` before running it.
 
@@ -31,7 +31,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Alternatively, double-click `run.bat`. The editor is available at <http://127.0.0.1:5050>.
+Alternatively, double-click `run.bat`. The editor is available at <http://127.0.0.1:5050>, and the server stops after its last editor tab closes.
 
 ## Editing controls
 
@@ -59,7 +59,7 @@ Run:
 .\build_release.bat
 ```
 
-The script creates an isolated `.build-venv`, installs the pinned packages from `requirements-release.txt`, builds `PDFeditorAthome.exe`, creates a SHA-256 checksum and assembles `PDFeditorAthome-v1.0.1-windows-x64.zip`. Generated `build`, `dist` and `release` directories are ignored by git; compiled artifacts are distributed through GitHub Releases rather than committed to `main`.
+The script creates an isolated `.build-venv`, installs the pinned packages from `requirements-release.txt`, builds `PDFeditorAthome.exe`, creates a SHA-256 checksum and assembles `PDFeditorAthome-v1.0.1-windows-x64.zip` with its usage and third-party credits. Generated `build`, `dist` and `release` directories are ignored by git; compiled artifacts are distributed through GitHub Releases rather than committed to `main`.
 
 See [Building and releasing](docs/BUILDING.md) for the complete release procedure, [Static analysis and CI](docs/STATIC_ANALYSIS.md) for all automated checks, [Security policy](SECURITY.md) for vulnerability reporting, and [User guide](docs/USER_GUIDE.md) for usage details.
 
@@ -75,3 +75,7 @@ Pull requests also run Ruff, Mypy, djLint, codespell, Vulture, pip-audit, Bandit
 ## Local processing
 
 PDFeditorAthome listens only on `127.0.0.1`. Imported pages and document previews are processed locally, held in memory while the application runs, and discarded when the process stops.
+
+## Third-party credits
+
+PDFeditorAthome is made possible by Flask and Werkzeug, PyMuPDF, python-docx, Pillow and Beautiful Soup. The project uses browser-native JavaScript and does not bundle a client-side framework. See [Third-party credits](docs/THIRD_PARTY.md) for project links, licenses and acknowledgements for runtime, build and quality tooling.

@@ -15,6 +15,8 @@ Every pull request and push to `main` runs two GitHub Actions workflows.
 - Project-local Semgrep rules for dangerous Python and JavaScript APIs.
 - Zizmor auditing of GitHub Actions permissions and definitions.
 
+The Semgrep rules intentionally live at [`.semgrep.yml`](../.semgrep.yml) in the repository root. They are shared by the workflow and local commands, while `.github/workflows` is reserved for GitHub Actions workflow definitions.
+
 ## Windows package workflow
 
 The Windows workflow runs the tests, builds the PyInstaller executable, starts it without opening a browser, verifies its health endpoint and home page, and uploads the executable, ZIP, and checksum as a temporary workflow artifact.

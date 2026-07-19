@@ -6,6 +6,55 @@
   const clone = (value) => window.structuredClone ? structuredClone(value) : JSON.parse(JSON.stringify(value));
   const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
   const projectFormat = 'pdfeditorathome';
+  const lifecycleSessionId = uid();
+  let lifecycleSequence = 0;
+  let lifecycleHeartbeatTimer = null;
+  let lifecycleDisconnected = false;
+
+  function lifecycleBody() {
+    lifecycleSequence += 1;
+    return JSON.stringify({ sessionId: lifecycleSessionId, sequence: lifecycleSequence });
+  }
+
+  function sendLifecycleHeartbeat() {
+    lifecycleDisconnected = false;
+    fetch('/api/lifecycle/heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: lifecycleBody(),
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  function startLifecycleHeartbeat() {
+    if (lifecycleHeartbeatTimer !== null) clearInterval(lifecycleHeartbeatTimer);
+    sendLifecycleHeartbeat();
+    lifecycleHeartbeatTimer = window.setInterval(sendLifecycleHeartbeat, 5000);
+  }
+
+  function sendLifecycleDisconnect() {
+    if (lifecycleDisconnected) return;
+    lifecycleDisconnected = true;
+    if (lifecycleHeartbeatTimer !== null) clearInterval(lifecycleHeartbeatTimer);
+    lifecycleHeartbeatTimer = null;
+    const body = lifecycleBody();
+    if (navigator.sendBeacon
+        && navigator.sendBeacon('/api/lifecycle/disconnect', new Blob([body], { type: 'application/json' }))) {
+      return;
+    }
+    fetch('/api/lifecycle/disconnect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  startLifecycleHeartbeat();
+  window.addEventListener('pagehide', sendLifecycleDisconnect);
+  window.addEventListener('pageshow', event => {
+    if (event.persisted) startLifecycleHeartbeat();
+  });
 
   const elements = {
     stage: $('#stage'),

@@ -12,8 +12,10 @@ First public Windows release of the local-first PDF and document editor.
 - Exports PDF, DOCX, PNG and JPG.
 - Saves editable `.pdfeditorathome` project files.
 - Runs as a standalone 64-bit Windows executable without a Python installation.
+- Stops the local server and console automatically after the last editor browser tab closes.
 - Updates Flask and Pillow to audited, supported releases.
 - Adds multi-version tests, type checking, linting, formatting, dead-code detection, dependency auditing, Python and JavaScript security rules, and GitHub Actions hardening checks.
 - Builds and smoke-tests the Windows executable in CI before publishing it.
+- Includes third-party library and tool credits in the release package.
 
 The executable is not Authenticode code-signed. Confirm its SHA-256 value using the attached checksum file before running it.
