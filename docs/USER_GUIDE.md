@@ -62,3 +62,13 @@ Open **Export** and choose **PDFeditorAthome project** to download a `.pdfeditor
 - Imported PDF text fidelity depends on the fonts and positioning data stored in the source PDF.
 - DOCX export prioritizes page appearance rather than reconstructing the original Word document structure.
 - Editing and re-exporting an already signed PDF does not preserve its original cryptographic signature.
+
+## Release verification
+
+The Windows executable is not currently Authenticode code-signed. Download it only from this project's GitHub Releases page and compare its SHA-256 digest with the attached `SHA256SUMS.txt` before running it:
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\PDFeditorAthome.exe
+```
+
+The digest must exactly match the value published with the same release. See the [security policy](../SECURITY.md) to report a vulnerability privately.

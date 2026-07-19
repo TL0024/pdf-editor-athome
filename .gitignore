@@ -1,5 +1,7 @@
 __pycache__/
 .pytest_cache/
+.coverage
+.coverage.*
 .agents/
 .codex/
 *.py[cod]
@@ -8,6 +10,8 @@ debug.log
 .venv/
 venv/
 .build-venv/
+.quality-venv/
+.security-venv/
 build/
 dist/
 release/

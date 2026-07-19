@@ -1,5 +1,8 @@
 # PDFeditorAthome
 
+[![Static analysis](https://github.com/TL0024/pdf-editor-athome/actions/workflows/static-analysis.yml/badge.svg)](https://github.com/TL0024/pdf-editor-athome/actions/workflows/static-analysis.yml)
+[![Windows package](https://github.com/TL0024/pdf-editor-athome/actions/workflows/windows-build.yml/badge.svg)](https://github.com/TL0024/pdf-editor-athome/actions/workflows/windows-build.yml)
+
 PDFeditorAthome is a local-first document editor for Windows. It opens PDF, DOCX, text, Markdown, HTML and common image files, converts supported text into editable objects, and exports the result as PDF, DOCX, PNG or JPG.
 
 ## Features
@@ -17,7 +20,7 @@ PDFeditorAthome is a local-first document editor for Windows. It opens PDF, DOCX
 
 Download the latest package from [GitHub Releases](https://github.com/TL0024/pdf-editor-athome/releases). Extract the ZIP, double-click `PDFeditorAthome.exe`, and keep its console window open while using the editor. Close the console window to stop the local server.
 
-The packaged application supports 64-bit Windows 10 and Windows 11 and does not require Python. The v1.0.0 executable is not Authenticode code-signed, so Windows may display an unknown-publisher warning. Verify the executable against the included `SHA256SUMS.txt` before running it.
+The packaged application supports 64-bit Windows 10 and Windows 11 and does not require Python. The v1.0.1 executable is not Authenticode code-signed, so Windows may display an unknown-publisher warning. Verify the executable against the included `SHA256SUMS.txt` before running it.
 
 ## Run from source
 
@@ -56,16 +59,18 @@ Run:
 .\build_release.bat
 ```
 
-The script creates an isolated `.build-venv`, installs the pinned packages from `requirements-release.txt`, builds `PDFeditorAthome.exe`, creates a SHA-256 checksum and assembles `PDFeditorAthome-v1.0.0-windows-x64.zip`. Generated `build`, `dist` and `release` directories are ignored by git; compiled artifacts are distributed through GitHub Releases rather than committed to `main`.
+The script creates an isolated `.build-venv`, installs the pinned packages from `requirements-release.txt`, builds `PDFeditorAthome.exe`, creates a SHA-256 checksum and assembles `PDFeditorAthome-v1.0.1-windows-x64.zip`. Generated `build`, `dist` and `release` directories are ignored by git; compiled artifacts are distributed through GitHub Releases rather than committed to `main`.
 
-See [Building and releasing](docs/BUILDING.md) for the complete release procedure and [User guide](docs/USER_GUIDE.md) for usage details.
+See [Building and releasing](docs/BUILDING.md) for the complete release procedure, [Static analysis and CI](docs/STATIC_ANALYSIS.md) for all automated checks, [Security policy](SECURITY.md) for vulnerability reporting, and [User guide](docs/USER_GUIDE.md) for usage details.
 
 ## Test
 
 ```powershell
 python -m pip install -r requirements-dev.txt
-python -m pytest -q
+python -m pytest -q --cov=app --cov-branch --cov-report=term-missing
 ```
+
+Pull requests also run Ruff, Mypy, djLint, codespell, Vulture, pip-audit, Bandit, Semgrep, Zizmor, a three-version Python test matrix, and a clean Windows package smoke test.
 
 ## Local processing
 

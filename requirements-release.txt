@@ -1,7 +1,7 @@
-# Versions used to reproduce the tested PDFeditorAthome v1.0.0 Windows release.
-Flask==3.0.3
-PyMuPDF==1.27.1
+# Versions used to reproduce the tested PDFeditorAthome v1.0.1 Windows release.
+Flask==3.1.3
+PyMuPDF==1.28.0
 python-docx==1.2.0
-Pillow==10.4.0
-beautifulsoup4==4.14.2
+Pillow==12.3.0
+beautifulsoup4==4.15.0
 PyInstaller==6.21.0

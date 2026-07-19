@@ -1,0 +1,4 @@
+bandit==1.9.4
+pip-audit==2.10.1
+semgrep==1.170.0
+zizmor==1.27.0

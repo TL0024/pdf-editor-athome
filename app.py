@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import io
-import json
 import os
 import re
 import sys
@@ -11,22 +10,23 @@ import time
 import uuid
 import webbrowser
 from collections import OrderedDict
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import fitz
 from bs4 import BeautifulSoup
 from docx import Document
+from docx.document import Document as DocumentObject
 from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, Response, jsonify, render_template, request, send_file
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 from werkzeug.exceptions import RequestEntityTooLarge
 
-
-APP_VERSION = "1.0.0"
 APP_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+APP_VERSION = (APP_ROOT / "VERSION").read_text(encoding="utf-8").strip()
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_CACHED_DOCUMENTS = 8
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".markdown", ".html", ".htm", ".png", ".jpg", ".jpeg", ".webp"}
@@ -51,20 +51,72 @@ def _font_file_path(
 ) -> Path | None:
     family = family.lower()
     if "calibri" in family:
-        windows_name = "calibriz.ttf" if bold and italic else "calibrib.ttf" if bold else "calibrii.ttf" if italic else "calibri.ttf"
-        linux_name = "DejaVuSans-BoldOblique.ttf" if bold and italic else "DejaVuSans-Bold.ttf" if bold else "DejaVuSans-Oblique.ttf" if italic else "DejaVuSans.ttf"
+        windows_name = (
+            "calibriz.ttf"
+            if bold and italic
+            else "calibrib.ttf"
+            if bold
+            else "calibrii.ttf"
+            if italic
+            else "calibri.ttf"
+        )
+        linux_name = (
+            "DejaVuSans-BoldOblique.ttf"
+            if bold and italic
+            else "DejaVuSans-Bold.ttf"
+            if bold
+            else "DejaVuSans-Oblique.ttf"
+            if italic
+            else "DejaVuSans.ttf"
+        )
         linux_folder = "dejavu"
     elif "mono" in family or "consol" in family or "courier" in family:
-        windows_name = "consolaz.ttf" if bold and italic else "consolab.ttf" if bold else "consolai.ttf" if italic else "consola.ttf"
-        linux_name = "DejaVuSansMono-BoldOblique.ttf" if bold and italic else "DejaVuSansMono-Bold.ttf" if bold else "DejaVuSansMono-Oblique.ttf" if italic else "DejaVuSansMono.ttf"
+        windows_name = (
+            "consolaz.ttf"
+            if bold and italic
+            else "consolab.ttf"
+            if bold
+            else "consolai.ttf"
+            if italic
+            else "consola.ttf"
+        )
+        linux_name = (
+            "DejaVuSansMono-BoldOblique.ttf"
+            if bold and italic
+            else "DejaVuSansMono-Bold.ttf"
+            if bold
+            else "DejaVuSansMono-Oblique.ttf"
+            if italic
+            else "DejaVuSansMono.ttf"
+        )
         linux_folder = "dejavu"
     elif ("serif" in family and "sans-serif" not in family) or "times" in family or "georgia" in family:
-        windows_name = "timesbi.ttf" if bold and italic else "timesbd.ttf" if bold else "timesi.ttf" if italic else "times.ttf"
-        linux_name = "DejaVuSerif-BoldItalic.ttf" if bold and italic else "DejaVuSerif-Bold.ttf" if bold else "DejaVuSerif-Italic.ttf" if italic else "DejaVuSerif.ttf"
+        windows_name = (
+            "timesbi.ttf" if bold and italic else "timesbd.ttf" if bold else "timesi.ttf" if italic else "times.ttf"
+        )
+        linux_name = (
+            "DejaVuSerif-BoldItalic.ttf"
+            if bold and italic
+            else "DejaVuSerif-Bold.ttf"
+            if bold
+            else "DejaVuSerif-Italic.ttf"
+            if italic
+            else "DejaVuSerif.ttf"
+        )
         linux_folder = "dejavu"
     else:
-        windows_name = "arialbi.ttf" if bold and italic else "arialbd.ttf" if bold else "ariali.ttf" if italic else "arial.ttf"
-        linux_name = "DejaVuSans-BoldOblique.ttf" if bold and italic else "DejaVuSans-Bold.ttf" if bold else "DejaVuSans-Oblique.ttf" if italic else "DejaVuSans.ttf"
+        windows_name = (
+            "arialbi.ttf" if bold and italic else "arialbd.ttf" if bold else "ariali.ttf" if italic else "arial.ttf"
+        )
+        linux_name = (
+            "DejaVuSans-BoldOblique.ttf"
+            if bold and italic
+            else "DejaVuSans-Bold.ttf"
+            if bold
+            else "DejaVuSans-Oblique.ttf"
+            if italic
+            else "DejaVuSans.ttf"
+        )
         linux_folder = "dejavu"
     candidates = [
         Path("C:/Windows/Fonts") / windows_name,
@@ -108,7 +160,12 @@ def _remember_document(name: str, pages: list[bytes], dimensions: list[tuple[int
     return document_id
 
 
-def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, width: int) -> list[str]:
+def _wrap_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    width: int,
+) -> list[str]:
     if not text:
         return [""]
     words = text.replace("\t", "    ").split(" ")
@@ -126,7 +183,7 @@ def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, 
     return lines or [""]
 
 
-def _iter_docx_blocks(document: Document) -> Iterable[dict[str, Any]]:
+def _iter_docx_blocks(document: DocumentObject) -> Iterable[dict[str, Any]]:
     from docx.table import Table
     from docx.text.paragraph import Paragraph
 
@@ -182,9 +239,9 @@ def _render_blocks(
     usable_width = page_width - margin_x * 2
     images: list[Image.Image] = []
     page_annotations: list[list[dict[str, Any]]] = []
-    image: Image.Image
-    draw: ImageDraw.ImageDraw
-    y: int
+    image = Image.new("RGB", (1, 1), "white")
+    draw = ImageDraw.Draw(image)
+    y = margin_y
 
     def new_page() -> None:
         nonlocal image, draw, y
@@ -214,21 +271,23 @@ def _render_blocks(
                 ]
                 row_height = max(48, max(len(lines) for lines in wrapped_cells) * 29 + 18)
                 ensure_space(row_height)
-                for index, lines in enumerate(wrapped_cells):
+                for index, _lines in enumerate(wrapped_cells):
                     left = margin_x + index * cell_width
                     right = margin_x + (index + 1) * cell_width
                     draw.rectangle((left, y, right, y + row_height), outline="#cbd5e1", width=2)
                     cell_text = str(row[index]) if index < len(row) else ""
                     if cell_text:
-                        page_annotations[-1].append(_text_annotation(
-                            cell_text,
-                            left + 10,
-                            y + 9,
-                            cell_width - 20,
-                            row_height - 18,
-                            21,
-                            color="#1e293b",
-                        ))
+                        page_annotations[-1].append(
+                            _text_annotation(
+                                cell_text,
+                                left + 10,
+                                y + 9,
+                                cell_width - 20,
+                                row_height - 18,
+                                21,
+                                color="#1e293b",
+                            )
+                        )
                 y += row_height
             y += 24
             continue
@@ -254,15 +313,17 @@ def _render_blocks(
         lines = _wrap_text(draw, text, font, usable_width)
         required = len(lines) * line_height + spacing
         ensure_space(required)
-        page_annotations[-1].append(_text_annotation(
-            text,
-            margin_x,
-            y,
-            usable_width,
-            len(lines) * line_height,
-            size,
-            bold=bold,
-        ))
+        page_annotations[-1].append(
+            _text_annotation(
+                text,
+                margin_x,
+                y,
+                usable_width,
+                len(lines) * line_height,
+                size,
+                bold=bold,
+            )
+        )
         y += len(lines) * line_height
         y += spacing
 
@@ -385,12 +446,14 @@ def _document_to_pages(
             for element in soup.find_all(["h1", "h2", "h3", "p", "li"]):
                 text = element.get_text(" ", strip=True)
                 if text:
-                    blocks.append({
-                        "type": "paragraph",
-                        "text": text,
-                        "level": 1 if element.name == "h1" else 2 if element.name in {"h2", "h3"} else None,
-                        "bullet": element.name == "li",
-                    })
+                    blocks.append(
+                        {
+                            "type": "paragraph",
+                            "text": text,
+                            "level": 1 if element.name == "h1" else 2 if element.name in {"h2", "h3"} else None,
+                            "bullet": element.name == "li",
+                        }
+                    )
         else:
             for line in raw.splitlines():
                 stripped = line.strip()
@@ -477,10 +540,7 @@ def _compose_page(page: dict[str, Any]) -> Image.Image:
             points = annotation.get("points") or []
             if len(points) < 2:
                 continue
-            scaled_points = [
-                (float(point[0]) * scale_x, float(point[1]) * scale_y)
-                for point in points
-            ]
+            scaled_points = [(float(point[0]) * scale_x, float(point[1]) * scale_y) for point in points]
             line_width = max(1, int(float(annotation.get("lineWidth", 4)) * min(scale_x, scale_y)))
             draw.line(scaled_points, fill=color, width=line_width, joint="curve")
 
@@ -569,7 +629,12 @@ def _build_selectable_pdf(pages: list[dict[str, Any]]) -> bytes:
                     y -= font_size * 0.21
                 font_name = _register_pdf_font(pdf_page, annotation, font_cache)
                 if annotation.get("noWrap"):
-                    baseline = float(annotation.get("baselineY", annotation.get("y", 0) + annotation.get("fontSize", 24) * 0.9)) * scale_y
+                    baseline = (
+                        float(
+                            annotation.get("baselineY", annotation.get("y", 0) + annotation.get("fontSize", 24) * 0.9)
+                        )
+                        * scale_y
+                    )
                     pdf_page.insert_text(
                         fitz.Point(x, baseline),
                         text,
@@ -600,10 +665,7 @@ def _build_selectable_pdf(pages: list[dict[str, Any]]) -> bytes:
                 points = annotation.get("points") or []
                 if len(points) < 2:
                     continue
-                pdf_points = [
-                    fitz.Point(float(point[0]) * scale_x, float(point[1]) * scale_y)
-                    for point in points
-                ]
+                pdf_points = [fitz.Point(float(point[0]) * scale_x, float(point[1]) * scale_y) for point in points]
                 pdf_page.draw_polyline(
                     pdf_points,
                     color=color,
@@ -631,13 +693,15 @@ def index() -> str:
 
 
 @app.post("/api/import")
-def import_document():
+def import_document() -> Response | tuple[Response, int]:
     upload = request.files.get("file")
     if upload is None or not upload.filename:
         return jsonify({"error": "Choose a file to open."}), 400
     extension = Path(upload.filename).suffix.lower()
     if extension not in ALLOWED_EXTENSIONS:
-        return jsonify({"error": "Unsupported file. Open a PDF, DOCX, text, Markdown, HTML, PNG, JPG, or WebP file."}), 415
+        return jsonify(
+            {"error": "Unsupported file. Open a PDF, DOCX, text, Markdown, HTML, PNG, JPG, or WebP file."}
+        ), 415
     payload = upload.read()
     if not payload:
         return jsonify({"error": "The selected file is empty."}), 400
@@ -648,26 +712,28 @@ def import_document():
         return jsonify({"error": f"Could not open this file: {exc}"}), 422
 
     document_id = _remember_document(upload.filename, pages, dimensions)
-    return jsonify({
-        "documentId": document_id,
-        "name": Path(upload.filename).stem,
-        "sourceFormat": extension.lstrip("."),
-        "pages": [
-            {
-                "width": width,
-                "height": height,
-                "serverIndex": index,
-                "imageUrl": f"/api/documents/{document_id}/pages/{index}",
-                "annotations": annotations[index],
-            }
-            for index, (width, height) in enumerate(dimensions)
-        ],
-        "editableTextCount": sum(len(items) for items in annotations),
-    })
+    return jsonify(
+        {
+            "documentId": document_id,
+            "name": Path(upload.filename).stem,
+            "sourceFormat": extension.lstrip("."),
+            "pages": [
+                {
+                    "width": width,
+                    "height": height,
+                    "serverIndex": index,
+                    "imageUrl": f"/api/documents/{document_id}/pages/{index}",
+                    "annotations": annotations[index],
+                }
+                for index, (width, height) in enumerate(dimensions)
+            ],
+            "editableTextCount": sum(len(items) for items in annotations),
+        }
+    )
 
 
 @app.get("/api/documents/<document_id>/pages/<int:page_index>")
-def document_page(document_id: str, page_index: int):
+def document_page(document_id: str, page_index: int) -> Response | tuple[Response, int]:
     cached = _documents.get(document_id)
     if not cached or page_index < 0 or page_index >= len(cached["pages"]):
         return jsonify({"error": "Page not found."}), 404
@@ -676,7 +742,7 @@ def document_page(document_id: str, page_index: int):
 
 
 @app.post("/api/export")
-def export_document():
+def export_document() -> Response | tuple[Response, int]:
     payload = request.get_json(silent=True) or {}
     pages = payload.get("pages") or []
     export_format = str(payload.get("format", "pdf")).lower()
@@ -696,7 +762,12 @@ def export_document():
                 image.save(output, format="PNG", optimize=True)
                 mimetype = "image/png"
             output.seek(0)
-            return send_file(output, mimetype=mimetype, as_attachment=True, download_name=_safe_download_name(payload.get("name", ""), export_format))
+            return send_file(
+                output,
+                mimetype=mimetype,
+                as_attachment=True,
+                download_name=_safe_download_name(payload.get("name", ""), export_format),
+            )
 
         output = io.BytesIO()
         if export_format == "pdf":
@@ -725,19 +796,24 @@ def export_document():
             document.save(output)
             mimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         output.seek(0)
-        return send_file(output, mimetype=mimetype, as_attachment=True, download_name=_safe_download_name(payload.get("name", ""), export_format))
+        return send_file(
+            output,
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=_safe_download_name(payload.get("name", ""), export_format),
+        )
     except Exception as exc:
         app.logger.exception("Export failed")
         return jsonify({"error": f"Could not export this document: {exc}"}), 422
 
 
 @app.errorhandler(RequestEntityTooLarge)
-def upload_too_large(_error: RequestEntityTooLarge):
+def upload_too_large(_error: RequestEntityTooLarge) -> tuple[Response, int]:
     return jsonify({"error": "That file is larger than the 50 MB limit."}), 413
 
 
 @app.get("/api/health")
-def health():
+def health() -> Response:
     return jsonify({"status": "ok"})
 
 

@@ -1,4 +1,4 @@
-PDFeditorAthome v1.0.0
+PDFeditorAthome v1.0.1
 ================================
 
 System requirements
@@ -21,6 +21,6 @@ processed locally and held in memory while the application is running.
 
 Windows warning
 ---------------
-This v1.0 executable is not Authenticode code-signed. Windows SmartScreen may
+This v1.0.1 executable is not Authenticode code-signed. Windows SmartScreen may
 therefore display "Unknown publisher". Verify PDFeditorAthome.exe against the SHA-256
 value in SHA256SUMS.txt before running it.
