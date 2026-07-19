@@ -1,0 +1,54 @@
+name: Publish release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, verify, and publish Windows release
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+      - name: Verify tag matches VERSION
+        shell: pwsh
+        run: |
+          $expected = "v$((Get-Content -LiteralPath VERSION -Raw).Trim())"
+          if ($env:GITHUB_REF_NAME -ne $expected) {
+            throw "Tag $env:GITHUB_REF_NAME does not match VERSION ($expected)."
+          }
+      - name: Install release and test dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-release.txt -r requirements-dev.txt
+      - name: Run unit tests
+        run: python -m pytest -q
+      - name: Build release files
+        shell: cmd
+        run: build_release.bat
+      - name: Smoke-test executable
+        shell: pwsh
+        run: ./scripts/smoke_test_release.ps1
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $env:GITHUB_SHA `
+            --title "PDFeditorAthome $env:GITHUB_REF_NAME" `
+            --notes-file packaging/RELEASE_NOTES.md `
+            --latest `
+            release/PDFeditorAthome-v1.0.1-windows-x64/PDFeditorAthome.exe `
+            release/PDFeditorAthome-v1.0.1-windows-x64/SHA256SUMS.txt `
+            release/PDFeditorAthome-v1.0.1-windows-x64.zip

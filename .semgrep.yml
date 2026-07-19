@@ -1,0 +1,44 @@
+rules:
+  - id: python-dynamic-code-execution
+    languages: [python]
+    severity: ERROR
+    message: Dynamic code execution can run attacker-controlled input.
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+
+  - id: python-unsafe-pickle-deserialization
+    languages: [python]
+    severity: ERROR
+    message: Pickle deserialization can execute arbitrary code.
+    pattern-either:
+      - pattern: pickle.load(...)
+      - pattern: pickle.loads(...)
+
+  - id: python-subprocess-shell-true
+    languages: [python]
+    severity: ERROR
+    message: Avoid invoking a shell from subprocess APIs.
+    patterns:
+      - pattern: subprocess.$FUNC(..., shell=True, ...)
+
+  - id: flask-debug-enabled
+    languages: [python]
+    severity: ERROR
+    message: Never enable Flask debug mode in packaged builds.
+    pattern: $APP.run(..., debug=True, ...)
+
+  - id: javascript-dynamic-code-execution
+    languages: [javascript]
+    severity: ERROR
+    message: Dynamic JavaScript execution can run attacker-controlled input.
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+      - pattern-regex: "setTimeout\\s*\\(\\s*['\"]"
+
+  - id: javascript-document-write
+    languages: [javascript]
+    severity: ERROR
+    message: document.write can create script-injection vulnerabilities.
+    pattern: document.write(...)

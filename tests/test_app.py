@@ -1,19 +1,21 @@
 import base64
 import io
+from typing import Any, cast
 
 import fitz
 from docx import Document
+from flask.testing import FlaskClient
 from PIL import Image, ImageChops
 
 from app import app
 
 
-def client():
+def client() -> FlaskClient:
     app.config.update(TESTING=True)
     return app.test_client()
 
 
-def import_text_page(test_client):
+def import_text_page(test_client: FlaskClient) -> dict[str, Any]:
     response = test_client.post(
         "/api/import",
         data={"file": (io.BytesIO(b"# Sample document\n\nA paragraph for export."), "sample.md")},
@@ -23,7 +25,7 @@ def import_text_page(test_client):
     return response.get_json()
 
 
-def export_payload(imported, export_format):
+def export_payload(imported: dict[str, Any], export_format: str) -> dict[str, Any]:
     page = imported["pages"][0]
     return {
         "name": "Edited sample",
@@ -35,7 +37,8 @@ def export_payload(imported, export_format):
                 "height": page["height"],
                 "documentId": imported["documentId"],
                 "serverIndex": page["serverIndex"],
-                "annotations": page.get("annotations", []) + [
+                "annotations": [
+                    *page.get("annotations", []),
                     {
                         "id": "text-1",
                         "type": "text",
@@ -63,7 +66,7 @@ def export_payload(imported, export_format):
     }
 
 
-def test_home_and_health():
+def test_home_and_health() -> None:
     test_client = client()
     home = test_client.get("/")
     assert home.status_code == 200
@@ -71,7 +74,7 @@ def test_home_and_health():
     assert test_client.get("/api/health").get_json() == {"status": "ok"}
 
 
-def test_import_text_and_serve_page():
+def test_import_text_and_serve_page() -> None:
     test_client = client()
     imported = import_text_page(test_client)
     assert imported["sourceFormat"] == "md"
@@ -87,7 +90,7 @@ def test_import_text_and_serve_page():
     assert image.size == (1240, 1754)
 
 
-def test_import_pdf():
+def test_import_pdf() -> None:
     source = fitz.open()
     page = source.new_page(width=300, height=500)
     page.draw_rect(page.rect, color=(0.8, 0.9, 1), fill=(0.8, 0.9, 1))
@@ -119,12 +122,12 @@ def test_import_pdf():
     left, top = int(annotation["x"]), int(annotation["y"])
     right = min(background.width, int(annotation["x"] + annotation["width"]))
     bottom = min(background.height, int(annotation["y"] + annotation["height"]))
-    pixels = list(background.crop((left, top, right, bottom)).getdata())
+    pixels = cast(list[tuple[int, int, int]], list(background.crop((left, top, right, bottom)).get_flattened_data()))
     assert pixels
     assert min(min(pixel) for pixel in pixels) > 180
 
 
-def test_pdf_styled_runs_preserve_outer_spaces():
+def test_pdf_styled_runs_preserve_outer_spaces() -> None:
     source = fitz.open()
     page = source.new_page(width=500, height=200)
     x, baseline = 40, 80
@@ -149,7 +152,7 @@ def test_pdf_styled_runs_preserve_outer_spaces():
     assert [annotation["text"] for annotation in annotations] == [text for text, _font in runs]
 
 
-def test_import_docx_text_is_editable():
+def test_import_docx_text_is_editable() -> None:
     source = io.BytesIO()
     document = Document()
     document.add_heading("Editable Word heading", level=1)
@@ -171,7 +174,7 @@ def test_import_docx_text_is_editable():
     ]
 
 
-def test_export_pdf_png_and_docx():
+def test_export_pdf_png_and_docx() -> None:
     test_client = client()
     imported = import_text_page(test_client)
 
@@ -197,7 +200,7 @@ def test_export_pdf_png_and_docx():
     assert len(exported_docx.inline_shapes) == 1
 
 
-def test_added_text_alignment_matches_pdf_and_image_exports():
+def test_added_text_alignment_matches_pdf_and_image_exports() -> None:
     background = Image.new("RGB", (600, 400), "white")
     background_buffer = io.BytesIO()
     background.save(background_buffer, format="PNG")
@@ -242,7 +245,7 @@ def test_added_text_alignment_matches_pdf_and_image_exports():
     assert abs(pdf_box[1] - png_box[1]) <= 2
 
 
-def test_reject_unsupported_extension():
+def test_reject_unsupported_extension() -> None:
     response = client().post(
         "/api/import",
         data={"file": (io.BytesIO(b"not a presentation"), "slides.ppt")},
