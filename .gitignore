@@ -1,0 +1,14 @@
+__pycache__/
+.pytest_cache/
+.agents/
+.codex/
+*.py[cod]
+tests/ui-smoke.png
+debug.log
+.venv/
+venv/
+.build-venv/
+build/
+dist/
+release/
+*.pdfeditorathome
