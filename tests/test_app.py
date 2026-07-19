@@ -7,12 +7,97 @@ from docx import Document
 from flask.testing import FlaskClient
 from PIL import Image, ImageChops
 
-from app import app
+from app import BrowserLifecycleMonitor, app
 
 
 def client() -> FlaskClient:
     app.config.update(TESTING=True)
     return app.test_client()
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+def test_browser_lifecycle_waits_for_every_session_to_close() -> None:
+    clock = FakeClock()
+    monitor = BrowserLifecycleMonitor(heartbeat_timeout=10, close_grace=2, clock=clock)
+
+    assert monitor.should_shutdown() is False
+    monitor.heartbeat("first-tab", 1)
+    monitor.heartbeat("second-tab", 1)
+    monitor.disconnect("first-tab", 2)
+    clock.advance(3)
+    assert monitor.should_shutdown() is False
+
+    monitor.disconnect("second-tab", 2)
+    clock.advance(1.9)
+    assert monitor.should_shutdown() is False
+    clock.advance(0.1)
+    assert monitor.should_shutdown() is True
+
+
+def test_browser_lifecycle_heartbeat_recovers_during_close_grace() -> None:
+    clock = FakeClock()
+    monitor = BrowserLifecycleMonitor(heartbeat_timeout=10, close_grace=2, clock=clock)
+
+    monitor.heartbeat("refreshing-tab", 1)
+    monitor.disconnect("refreshing-tab", 2)
+    clock.advance(1)
+    monitor.heartbeat("replacement-tab", 1)
+    clock.advance(5)
+
+    assert monitor.should_shutdown() is False
+
+
+def test_browser_lifecycle_expires_an_abandoned_session() -> None:
+    clock = FakeClock()
+    monitor = BrowserLifecycleMonitor(heartbeat_timeout=10, close_grace=2, clock=clock)
+
+    monitor.heartbeat("abandoned-tab", 1)
+    clock.advance(10)
+    assert monitor.should_shutdown() is False
+    clock.advance(2)
+    assert monitor.should_shutdown() is True
+
+
+def test_browser_lifecycle_ignores_a_late_heartbeat_after_disconnect() -> None:
+    clock = FakeClock()
+    monitor = BrowserLifecycleMonitor(heartbeat_timeout=10, close_grace=2, clock=clock)
+
+    monitor.heartbeat("closing-tab", 1)
+    monitor.disconnect("closing-tab", 3)
+    monitor.heartbeat("closing-tab", 2)
+    clock.advance(2)
+
+    assert monitor.should_shutdown() is True
+
+
+def test_browser_lifecycle_endpoints_validate_and_update_sessions() -> None:
+    clock = FakeClock()
+    monitor = BrowserLifecycleMonitor(heartbeat_timeout=10, close_grace=0, clock=clock)
+    app.config["BROWSER_LIFECYCLE_MONITOR"] = monitor
+    test_client = client()
+    try:
+        assert test_client.post("/api/lifecycle/heartbeat", json={}).status_code == 400
+        assert (
+            test_client.post("/api/lifecycle/heartbeat", json={"sessionId": "editor-tab", "sequence": 1}).status_code
+            == 204
+        )
+        assert (
+            test_client.post("/api/lifecycle/disconnect", json={"sessionId": "editor-tab", "sequence": 2}).status_code
+            == 204
+        )
+        assert monitor.should_shutdown() is True
+    finally:
+        app.config.pop("BROWSER_LIFECYCLE_MONITOR", None)
 
 
 def import_text_page(test_client: FlaskClient) -> dict[str, Any]:

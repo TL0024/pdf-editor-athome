@@ -10,7 +10,7 @@ import time
 import uuid
 import webbrowser
 from collections import OrderedDict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +24,7 @@ from docx.shared import Inches, Pt
 from flask import Flask, Response, jsonify, render_template, request, send_file
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.serving import BaseWSGIServer, make_server
 
 APP_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 APP_VERSION = (APP_ROOT / "VERSION").read_text(encoding="utf-8").strip()
@@ -31,6 +32,9 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_CACHED_DOCUMENTS = 8
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".markdown", ".html", ".htm", ".png", ".jpg", ".jpeg", ".webp"}
 PAGE_SIZE = (1240, 1754)  # A4 at approximately 150 dpi
+BROWSER_HEARTBEAT_TIMEOUT_SECONDS = 90.0
+BROWSER_CLOSE_GRACE_SECONDS = 1.5
+BROWSER_SESSION_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,128}")
 
 app = Flask(
     __name__,
@@ -42,6 +46,76 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 # This app is intentionally local-first. Imported page previews stay in memory and
 # are dropped as older documents are opened.
 _documents: OrderedDict[str, dict[str, Any]] = OrderedDict()
+
+
+class BrowserLifecycleMonitor:
+    """Track open editor pages so the local server can follow their lifecycle."""
+
+    def __init__(
+        self,
+        heartbeat_timeout: float = BROWSER_HEARTBEAT_TIMEOUT_SECONDS,
+        close_grace: float = BROWSER_CLOSE_GRACE_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.heartbeat_timeout = heartbeat_timeout
+        self.close_grace = close_grace
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._sessions: dict[str, tuple[float, int]] = {}
+        self._last_sequences: dict[str, int] = {}
+        self._ever_connected = False
+        self._empty_since: float | None = None
+
+    def heartbeat(self, session_id: str, sequence: int) -> None:
+        with self._lock:
+            if sequence <= self._last_sequences.get(session_id, -1):
+                return
+            self._last_sequences[session_id] = sequence
+            self._sessions[session_id] = (self._clock(), sequence)
+            self._ever_connected = True
+            self._empty_since = None
+
+    def disconnect(self, session_id: str, sequence: int) -> None:
+        with self._lock:
+            if sequence <= self._last_sequences.get(session_id, -1):
+                return
+            self._last_sequences[session_id] = sequence
+            self._sessions.pop(session_id, None)
+            self._ever_connected = True
+            if not self._sessions:
+                self._empty_since = self._clock()
+
+    def should_shutdown(self) -> bool:
+        with self._lock:
+            now = self._clock()
+            expired = [
+                session_id
+                for session_id, (last_seen, _sequence) in self._sessions.items()
+                if now - last_seen >= self.heartbeat_timeout
+            ]
+            for session_id in expired:
+                del self._sessions[session_id]
+
+            if self._sessions or not self._ever_connected:
+                self._empty_since = None
+                return False
+            if self._empty_since is None:
+                self._empty_since = now
+                return False
+            return now - self._empty_since >= self.close_grace
+
+
+def _browser_session() -> tuple[str, int] | None:
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return None
+    session_id = payload.get("sessionId")
+    sequence = payload.get("sequence")
+    if not isinstance(session_id, str) or not BROWSER_SESSION_ID_PATTERN.fullmatch(session_id):
+        return None
+    if type(sequence) is not int or not 0 <= sequence <= 2_147_483_647:
+        return None
+    return session_id, sequence
 
 
 def _font_file_path(
@@ -817,6 +891,70 @@ def health() -> Response:
     return jsonify({"status": "ok"})
 
 
+@app.post("/api/lifecycle/heartbeat")
+def browser_heartbeat() -> tuple[Response, int] | Response:
+    browser_session = _browser_session()
+    if browser_session is None:
+        return jsonify({"error": "A valid browser session and sequence are required."}), 400
+    monitor = app.config.get("BROWSER_LIFECYCLE_MONITOR")
+    if isinstance(monitor, BrowserLifecycleMonitor):
+        monitor.heartbeat(*browser_session)
+    return Response(status=204)
+
+
+@app.post("/api/lifecycle/disconnect")
+def browser_disconnect() -> tuple[Response, int] | Response:
+    browser_session = _browser_session()
+    if browser_session is None:
+        return jsonify({"error": "A valid browser session and sequence are required."}), 400
+    monitor = app.config.get("BROWSER_LIFECYCLE_MONITOR")
+    if isinstance(monitor, BrowserLifecycleMonitor):
+        monitor.disconnect(*browser_session)
+    return Response(status=204)
+
+
+def _stop_server_when_browser_closes(
+    server: BaseWSGIServer,
+    monitor: BrowserLifecycleMonitor,
+    stop_event: threading.Event,
+) -> None:
+    while not stop_event.wait(0.25):
+        if monitor.should_shutdown():
+            print("The editor page was closed. Stopping PDFeditorAthome...")
+            server.shutdown()
+            return
+
+
+def run_local_server(port: int, *, monitor_browser: bool = True) -> None:
+    server = make_server("127.0.0.1", port, app, threaded=True)
+    stop_event = threading.Event()
+    lifecycle_thread: threading.Thread | None = None
+    monitor: BrowserLifecycleMonitor | None = None
+
+    if monitor_browser:
+        monitor = BrowserLifecycleMonitor()
+        app.config["BROWSER_LIFECYCLE_MONITOR"] = monitor
+        lifecycle_thread = threading.Thread(
+            target=_stop_server_when_browser_closes,
+            args=(server, monitor, stop_event),
+            daemon=True,
+            name="browser-lifecycle-monitor",
+        )
+        lifecycle_thread.start()
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop_event.set()
+        server.server_close()
+        if lifecycle_thread is not None:
+            lifecycle_thread.join(timeout=1.0)
+        if app.config.get("BROWSER_LIFECYCLE_MONITOR") is monitor:
+            app.config.pop("BROWSER_LIFECYCLE_MONITOR", None)
+
+
 if __name__ == "__main__":
     try:
         port = int(os.environ.get("PDFEDITORATHOME_PORT", "5050"))
@@ -825,10 +963,11 @@ if __name__ == "__main__":
     if not 1 <= port <= 65535:
         port = 5050
     address = f"http://127.0.0.1:{port}"
-    if getattr(sys, "frozen", False) and os.environ.get("PDFEDITORATHOME_NO_BROWSER") != "1":
+    no_browser = os.environ.get("PDFEDITORATHOME_NO_BROWSER") == "1"
+    if getattr(sys, "frozen", False) and not no_browser:
         browser_timer = threading.Timer(1.0, webbrowser.open, args=(address,))
         browser_timer.daemon = True
         browser_timer.start()
     print(f"PDFeditorAthome v{APP_VERSION} is running at {address}")
-    print("Keep this window open while using PDFeditorAthome. Close it to stop the app.")
-    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+    print("Close every editor tab, or this window, to stop the app.")
+    run_local_server(port, monitor_browser=not no_browser)
