@@ -2,5 +2,5 @@
 codespell==2.4.3
 djlint==1.40.10
 mypy==2.3.0
-ruff==0.15.22
+ruff==0.16.0
 vulture==2.16
