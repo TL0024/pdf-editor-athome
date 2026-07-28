@@ -1,6 +1,6 @@
 -r requirements-dev.txt
 codespell==2.4.3
-djlint==1.40.10
+djlint==1.42.3
 mypy==2.3.0
 ruff==0.16.0
 vulture==2.16
