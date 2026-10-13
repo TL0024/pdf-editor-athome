@@ -194,6 +194,23 @@ async function run() {
     assert.equal(editor.state.name, 'Untitled document');
     assert.equal(editor.state.opening, false);
   });
+  await test('Malformed text formatting cannot replace the current document', async () => {
+    const { editor, text } = fixture();
+    const before = editor.state.pages;
+    await editor.openProject({text: async () => JSON.stringify({format: 'pdfeditorathome', version: 2,
+      name: 'Invalid formatting', pages: [{width: 100, height: 200, imageData: 'data:image/png;base64,aW1hZ2U=',
+        annotations: [{...text, runs: {text: 'wrong type'}}]}]})});
+    assert.equal(editor.state.pages, before);
+    assert.equal(editor.state.name, 'Untitled document');
+  });
+  await test('Malformed table cells cannot replace the current document', async () => {
+    const { editor, text } = fixture();
+    const before = editor.state.pages;
+    await editor.openProject({text: async () => JSON.stringify({format: 'pdfeditorathome', version: 2,
+      name: 'Invalid table', pages: [{width: 100, height: 200, imageData: 'data:image/png;base64,aW1hZ2U=',
+        annotations: [{...text, table: {id: 'bad', row: 5, column: 0, rows: 1, columns: 1, bounds: [0, 0, 10, 10]}}]}]})});
+    assert.equal(editor.state.pages, before);
+  });
   await test('Project round trip restores embedded layers and scale', async () => {
     const { editor } = fixture();
     await editor.openProject({text: async () => JSON.stringify({format: 'pdfeditorathome', version: 2,

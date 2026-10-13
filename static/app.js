@@ -1268,6 +1268,7 @@
     try {
       const data = JSON.parse(await file.text());
       if (!data || data.format !== projectFormat || ![1, 2].includes(data.version) || !Array.isArray(data.pages) || !data.pages.length || data.pages.length > 500) throw new Error('This is not a valid PDFeditorAthome project.');
+      if (data.name !== undefined && typeof data.name !== 'string') throw new Error('The project contains an invalid name.');
       const pages = data.pages.map(page => {
         if (!page || !Number.isFinite(page.width) || !Number.isFinite(page.height) || page.width < 1 || page.height < 1
             || page.width * page.height > 25000000 || !/^data:image\/[^;]+;base64,/.test(page.imageData || '')
@@ -1275,8 +1276,24 @@
         if (page.pointsPerPixel !== undefined && (!Number.isFinite(page.pointsPerPixel) || page.pointsPerPixel < 0.05 || page.pointsPerPixel > 5)) throw new Error('The project contains an invalid page scale.');
         for (const annotation of page.annotations) {
           if (!annotation || !['text', 'stroke'].includes(annotation.type)) throw new Error('The project contains an invalid object.');
+          for (const key of ['x', 'y', 'width', 'height', 'fontSize', 'baselineY', 'lineWidth', 'opacity']) {
+            if (annotation[key] !== undefined && (!Number.isFinite(annotation[key])
+                || (['width', 'height', 'fontSize', 'lineWidth', 'opacity'].includes(key) && annotation[key] < 0))) throw new Error('The project contains invalid object geometry.');
+          }
           if (annotation.type === 'text' && (typeof annotation.text !== 'string'
-              || !['x', 'y', 'width', 'height', 'fontSize'].every(key => Number.isFinite(annotation[key])))) throw new Error('The project contains invalid text.');
+              || !['x', 'y', 'width', 'height', 'fontSize'].every(key => Number.isFinite(annotation[key])) || annotation.fontSize <= 0)) throw new Error('The project contains invalid text.');
+          if (annotation.runs !== undefined && (!Array.isArray(annotation.runs) || annotation.runs.some(run => !run || typeof run.text !== 'string'
+              || (run.fontSize != null && (!Number.isFinite(run.fontSize) || run.fontSize <= 0))))) throw new Error('The project contains invalid text formatting.');
+          if (annotation.table) {
+            const table = annotation.table;
+            if (typeof table.id !== 'string' || !Number.isInteger(table.rows) || table.rows < 1 || table.rows > 10000
+                || !Number.isInteger(table.columns) || table.columns < 1 || table.columns > 100
+                || !Array.isArray(table.bounds) || table.bounds.length !== 4 || !table.bounds.every(Number.isFinite)) throw new Error('The project contains an invalid table.');
+            for (const [key, size, span] of [['row', 'rows', 'rowSpan'], ['column', 'columns', 'columnSpan']]) {
+              const length = table[span] ?? 1;
+              if (!Number.isInteger(table[key]) || table[key] < 0 || !Number.isInteger(length) || length < 1 || table[key] + length > table[size]) throw new Error('The project contains an invalid table cell.');
+            }
+          }
           if (annotation.type === 'stroke' && (!Array.isArray(annotation.points) || !annotation.points.every(point => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)))) throw new Error('The project contains an invalid drawing.');
         }
         return { ...page, id: uid(), imageUrl: null, documentId: null, serverIndex: null,
@@ -1284,7 +1301,8 @@
       });
       await Promise.all(pages.map(page => new Promise((resolve, reject) => {
         const image = new Image();
-        image.onload = resolve;
+        image.onload = () => image.naturalWidth * image.naturalHeight > 25000000
+          ? reject(new Error('The project contains an oversized page image.')) : resolve();
         image.onerror = () => reject(new Error('The project contains a damaged page image.'));
         image.src = page.imageData;
       })));

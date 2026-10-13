@@ -375,7 +375,7 @@ def _render_blocks(
     page_width, page_height = PAGE_SIZE
     margin_x, margin_y = 105, 105
     usable_width = page_width - margin_x * 2
-    images: list[Image.Image] = []
+    images: list[bytes] = []
     page_annotations: list[list[dict[str, Any]]] = []
     image = Image.new("RGB", (1, 1), "white")
     draw = ImageDraw.Draw(image)
@@ -383,12 +383,13 @@ def _render_blocks(
 
     def new_page() -> None:
         nonlocal image, draw, y
-        if len(images) >= MAX_DOCUMENT_PAGES:
+        if len(page_annotations) >= MAX_DOCUMENT_PAGES:
             raise ValueError(f"Documents are limited to {MAX_DOCUMENT_PAGES} pages.")
+        if page_annotations:
+            images.append(_png_bytes(image))
         image = Image.new("RGB", PAGE_SIZE, "white")
         draw = ImageDraw.Draw(image)
         y = margin_y
-        images.append(image)
         page_annotations.append([])
 
     def ensure_space(required: int) -> None:
@@ -481,6 +482,8 @@ def _render_blocks(
             size = max(run.get("fontSize") or size for run in runs)
         if len(runs) == 1:
             bold = runs[0].get("bold", bold)
+        if size * 1.45 > page_height - margin_y * 2:
+            raise ValueError("The document contains a font too large to fit on a page.")
         font = _font(round(size), bold)
         line_height = int(size * 1.45)
         lines = _wrap_text(draw, text, font, usable_width)
@@ -514,7 +517,8 @@ def _render_blocks(
                 new_page()
         y += spacing
 
-    return [_png_bytes(page) for page in images], [PAGE_SIZE for _ in images], page_annotations
+    images.append(_png_bytes(image))
+    return images, [PAGE_SIZE for _ in images], page_annotations
 
 
 def _pdf_text_family(flags: int, embedded_name: str = "") -> str:

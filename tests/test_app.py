@@ -670,3 +670,19 @@ def test_word_run_formatting_survives_pdf_export() -> None:
             for span in line["spans"]
         ]
         assert any("Bold" in span["text"] and span["color"] == 0xFF0000 and span["flags"] & 16 for span in spans)
+
+
+def test_unrenderable_word_font_returns_error_without_allocating_hundreds_of_pages() -> None:
+    from docx.shared import Pt
+
+    source = Document()
+    source.add_paragraph().add_run("Oversized text").font.size = Pt(1000)
+    output = io.BytesIO()
+    source.save(output)
+    response = client().post(
+        "/api/import",
+        data={"file": (io.BytesIO(output.getvalue()), "oversized.docx")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 422
+    assert "font too large" in response.get_json()["error"]
