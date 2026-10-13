@@ -121,6 +121,7 @@
     resizing: null,
     clipboard: null,
     propertyCheckpointed: false,
+    opening: false,
     lastTextClick: null,
     defaults: {
       text: { color: '#1f2937', fontSize: 24, fontFamily: 'Arial, sans-serif', opacity: 1, bold: false, italic: false, cover: false },
@@ -149,6 +150,7 @@
       documentId: null,
       serverIndex: null,
       annotations: [],
+      pointsPerPixel: 72 / 150,
     };
   }
 
@@ -204,6 +206,7 @@
   }
 
   function restoreSnapshot(value) {
+    state.dragging = state.resizing = state.drawing = state.marquee = null;
     state.pages = value.pages;
     state.selectedPage = Math.min(value.selectedPage, state.pages.length - 1);
     state.selectedIds = value.selectedIds || (value.selectedId ? [value.selectedId] : []);
@@ -472,7 +475,20 @@
       text.style.color = annotation.color;
       text.style.opacity = annotation.opacity;
       text.style.fontWeight = annotation.bold ? '700' : '400';
-      text.textContent = annotation.text;
+      const runs = annotation.runs || [];
+      if (runs.length && runs.map(run => run.text).join('') === annotation.text) {
+        runs.forEach(run => {
+          const span = document.createElement('span');
+          span.textContent = run.text;
+          span.style.fontWeight = run.bold ? '700' : '400';
+          span.style.fontStyle = run.italic ? 'italic' : 'normal';
+          if (run.underline) span.style.textDecoration = 'underline';
+          if (run.fontFamily) span.style.fontFamily = run.fontFamily;
+          if (run.fontSize) span.style.fontSize = `${run.fontSize * zoom}px`;
+          if (run.color) span.style.color = run.color;
+          text.append(span);
+        });
+      } else text.textContent = annotation.text;
       if (annotation.id === state.selectedId && state.tool === 'select') {
         const badge = document.createElement('span');
         badge.className = 'selection-badge';
@@ -598,13 +614,15 @@
     const points = annotation.points || [];
     if (!points.length) return null;
     const padding = Math.max(Number(annotation.lineWidth || 1) / 2, 2);
-    const xs = points.map(point => Number(point[0]));
-    const ys = points.map(point => Number(point[1]));
+    const bounds = points.reduce((bounds, point) => ({
+      left: Math.min(bounds.left, Number(point[0])), top: Math.min(bounds.top, Number(point[1])),
+      right: Math.max(bounds.right, Number(point[0])), bottom: Math.max(bounds.bottom, Number(point[1])),
+    }), {left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity});
     return {
-      left: Math.min(...xs) - padding,
-      top: Math.min(...ys) - padding,
-      right: Math.max(...xs) + padding,
-      bottom: Math.max(...ys) + padding,
+      left: bounds.left - padding,
+      top: bounds.top - padding,
+      right: bounds.right + padding,
+      bottom: bounds.bottom + padding,
     };
   }
 
@@ -696,7 +714,6 @@
     const annotations = selectedAnnotations();
     const bounds = combinedBounds(annotations);
     if (!annotations.length || !bounds) return;
-    checkpoint();
     const originals = {};
     annotations.forEach(annotation => {
       originals[annotation.id] = annotation.type === 'text'
@@ -713,6 +730,7 @@
       originals,
       start: point,
       moved: false,
+      checkpointed: false,
     };
     elements.stage.setPointerCapture(pointerId);
   }
@@ -729,7 +747,12 @@
       scaleX = scale;
       scaleY = scale;
     }
-    resize.moved = resize.moved || Math.abs(scaleX - 1) + Math.abs(scaleY - 1) > 0.01;
+    if (!resize.checkpointed && Math.abs(scaleX - 1) + Math.abs(scaleY - 1) > 0.01) {
+      checkpoint();
+      resize.checkpointed = true;
+    }
+    if (!resize.checkpointed) return;
+    resize.moved = true;
     currentAnnotations().filter(annotation => resize.ids.includes(annotation.id)).forEach(annotation => {
       const original = resize.originals[annotation.id];
       if (annotation.type === 'text') {
@@ -759,7 +782,7 @@
     const page = currentPage();
     const annotation = {
       id: uid(), type: 'text', x: point[0], y: point[1],
-      width: Math.min(300, page.width - point[0] - 12), height: 44,
+      width: Math.max(24, Math.min(300, page.width - point[0])), height: 44,
       text: 'Type here', ...defaults,
     };
     page.annotations.push(annotation);
@@ -775,7 +798,8 @@
 
   function beginTextEdit(element, selectAll = false) {
     if (!element) return;
-    element.contentEditable = 'true';
+    $('.selection-badge', element)?.remove();
+    element.contentEditable = 'plaintext-only';
     element.dataset.editStarted = 'false';
     element.focus();
     if (selectAll) {
@@ -794,7 +818,7 @@
     editor.className = 'text-annotation imported-text pdf-text-editor selected';
     editor.dataset.ann = annotation.id;
     editor.style.left = `${annotation.x * state.zoom}px`;
-    editor.style.top = `${(annotation.baselineY - annotation.fontSize * 0.9) * state.zoom}px`;
+    editor.style.top = `${((annotation.baselineY ?? annotation.y + annotation.fontSize * 0.9) - annotation.fontSize * 0.9) * state.zoom}px`;
     editor.style.width = `${Math.max(annotation.width, 20) * state.zoom}px`;
     editor.style.minHeight = `${Math.max(annotation.height, annotation.fontSize) * state.zoom}px`;
     editor.style.fontSize = `${annotation.fontSize * state.zoom}px`;
@@ -854,6 +878,7 @@
     const copies = annotations.map(annotation => {
       const copy = clone(annotation);
       copy.id = uid();
+      delete copy.table;
       if (copy.type === 'text') {
         copy.x += 16;
         copy.y += 16;
@@ -914,6 +939,7 @@
     const copies = state.clipboard.items.map(annotation => {
       const copy = clone(annotation);
       copy.id = uid();
+      delete copy.table;
       if (copy.type === 'text') {
         copy.x += offset;
         copy.y += offset;
@@ -932,6 +958,7 @@
 
   function pointerDown(event) {
     if (event.button !== 0) return;
+    if (event.target.closest?.('[contenteditable="true"], [contenteditable="plaintext-only"]')) return;
     const point = stagePoint(event);
     const targetAnnotation = annotationFromTarget(event.target);
 
@@ -995,10 +1022,8 @@
       });
       return;
     }
-    if (event.target.closest?.('[contenteditable="true"]')) return;
     if (!isSelected(targetAnnotation.id)) setSelection([targetAnnotation.id], targetAnnotation.id);
     else setSelection(state.selectedIds, targetAnnotation.id);
-    checkpoint();
     const annotations = selectedAnnotations();
     const originals = {};
     annotations.forEach(annotation => {
@@ -1018,6 +1043,7 @@
       originals,
       bounds,
       moved: false,
+      checkpointed: false,
     };
     elements.stage.setPointerCapture(event.pointerId);
     renderStage();
@@ -1051,7 +1077,12 @@
     const rawDy = point[1] - state.dragging.start[1];
     const dx = Math.max(-state.dragging.bounds.left, Math.min(rawDx, page.width - state.dragging.bounds.right));
     const dy = Math.max(-state.dragging.bounds.top, Math.min(rawDy, page.height - state.dragging.bounds.bottom));
-    state.dragging.moved = state.dragging.moved || Math.abs(dx) + Math.abs(dy) > 1;
+    if (!state.dragging.checkpointed && Math.abs(dx) + Math.abs(dy) > 1) {
+      checkpoint();
+      state.dragging.checkpointed = true;
+    }
+    if (!state.dragging.checkpointed) return;
+    state.dragging.moved = true;
     annotations.forEach(annotation => {
       const original = state.dragging.originals[annotation.id];
       if (annotation.type === 'text') {
@@ -1069,12 +1100,12 @@
         updateStrokeElement(annotation);
       }
     });
+    renderGroupSelectionBox();
   }
 
   function pointerUp(event) {
     if (state.resizing) {
-      if (!state.resizing.moved) state.history.pop();
-      else setDirty(true);
+      if (state.resizing.moved) setDirty(true);
       state.resizing = null;
       renderAll();
       if (elements.stage.hasPointerCapture?.(event.pointerId)) elements.stage.releasePointerCapture(event.pointerId);
@@ -1090,8 +1121,7 @@
       renderAll();
     }
     if (state.dragging) {
-      if (!state.dragging.moved) state.history.pop();
-      else setDirty(true);
+      if (state.dragging.moved) setDirty(true);
       state.dragging = null;
       renderAll();
     }
@@ -1106,13 +1136,23 @@
     });
     if (!annotations.length) return;
     if (checkpointFirst) checkpoint();
-    annotations.forEach(annotation => { annotation[property] = value; });
+    annotations.forEach(annotation => {
+      if (['fontSize', 'bold', 'color', 'italic'].includes(property)) delete annotation.runs;
+      if (property === 'fontSize' && annotation.type === 'text') {
+        const ratio = value / annotation.fontSize;
+        if (Number.isFinite(annotation.baselineY)) annotation.baselineY = annotation.y + (annotation.baselineY - annotation.y) * ratio;
+        annotation.height = Math.max(8, annotation.height * ratio);
+        if (annotation.noWrap) annotation.width = Math.max(8, annotation.width * ratio);
+      }
+      annotation[property] = value;
+    });
     const primary = selectedAnnotation() || annotations[0];
     const defaults = primary.type === 'text' ? state.defaults.text : primary.tool === 'highlight' ? state.defaults.highlight : state.defaults.pen;
     if (property in defaults) defaults[property] = value;
     setDirty(true);
     renderStage();
     renderProperties();
+    renderPageList();
   }
 
   function addBlankPage() {
@@ -1161,11 +1201,16 @@
   }
 
   async function openFile(file) {
-    if (!file) return;
+    if (!file || state.opening) return;
+    if (state.dirty && !window.confirm('Open another file and discard unsaved project changes?')) {
+      elements.fileInput.value = '';
+      return;
+    }
     if (file.name.toLowerCase().endsWith('.pdfeditorathome')) {
       await openProject(file);
       return;
     }
+    state.opening = true;
     showBusy('Opening document…', 'Converting pages locally');
     try {
       const form = new FormData();
@@ -1173,15 +1218,27 @@
       const response = await fetch('/api/import', { method: 'POST', body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not open the file.');
+      const pages = [];
+      for (const [index, page] of data.pages.entries()) {
+        const background = await fetch(page.imageUrl);
+        if (!background.ok) throw new Error('Could not load a page background.');
+        const imageData = await blobToDataUrl(await background.blob());
+        let pdfData = null;
+        if (page.pdfUrl) {
+          const pdf = await fetch(page.pdfUrl);
+          if (!pdf.ok) throw new Error('Could not load the original PDF artwork.');
+          pdfData = (await blobToDataUrl(await pdf.blob())).split(',')[1];
+        }
+        pages.push({
+          ...page, id: uid(), imageData, pdfData,
+          documentId: data.documentId, serverIndex: page.serverIndex ?? index,
+          annotations: (page.annotations || []).map(annotation => ({ ...annotation, id: annotation.id || uid() })),
+        });
+      }
       state.name = data.name || 'Untitled document';
       state.documentId = data.documentId;
       state.sourceFormat = data.sourceFormat;
-      state.pages = data.pages.map((page, index) => ({
-        id: uid(), width: page.width, height: page.height,
-        imageUrl: page.imageUrl, imageData: null,
-        documentId: data.documentId, serverIndex: page.serverIndex ?? index,
-        annotations: (page.annotations || []).map(annotation => ({ ...annotation, id: annotation.id || uid() })),
-      }));
+      state.pages = pages;
       state.selectedPage = 0;
       clearSelection();
       state.history = [];
@@ -1200,23 +1257,59 @@
       toast(error.message, 'error');
     } finally {
       hideBusy();
+      state.opening = false;
       elements.fileInput.value = '';
     }
   }
 
   async function openProject(file) {
+    state.opening = true;
     showBusy('Opening project…', 'Restoring editable layers');
     try {
       const data = JSON.parse(await file.text());
-      if (data.format !== projectFormat || !Array.isArray(data.pages) || !data.pages.length) throw new Error('This is not a valid PDFeditorAthome project.');
+      if (!data || data.format !== projectFormat || ![1, 2].includes(data.version) || !Array.isArray(data.pages) || !data.pages.length || data.pages.length > 500) throw new Error('This is not a valid PDFeditorAthome project.');
+      if (data.name !== undefined && typeof data.name !== 'string') throw new Error('The project contains an invalid name.');
+      const pages = data.pages.map(page => {
+        if (!page || !Number.isFinite(page.width) || !Number.isFinite(page.height) || page.width < 1 || page.height < 1
+            || page.width * page.height > 25000000 || !/^data:image\/[^;]+;base64,/.test(page.imageData || '')
+            || !Array.isArray(page.annotations)) throw new Error('The project contains an invalid page.');
+        if (page.pointsPerPixel !== undefined && (!Number.isFinite(page.pointsPerPixel) || page.pointsPerPixel < 0.05 || page.pointsPerPixel > 5)) throw new Error('The project contains an invalid page scale.');
+        for (const annotation of page.annotations) {
+          if (!annotation || !['text', 'stroke'].includes(annotation.type)) throw new Error('The project contains an invalid object.');
+          for (const key of ['x', 'y', 'width', 'height', 'fontSize', 'baselineY', 'lineWidth', 'opacity']) {
+            if (annotation[key] !== undefined && (!Number.isFinite(annotation[key])
+                || (['width', 'height', 'fontSize', 'lineWidth', 'opacity'].includes(key) && annotation[key] < 0))) throw new Error('The project contains invalid object geometry.');
+          }
+          if (annotation.type === 'text' && (typeof annotation.text !== 'string'
+              || !['x', 'y', 'width', 'height', 'fontSize'].every(key => Number.isFinite(annotation[key])) || annotation.fontSize <= 0)) throw new Error('The project contains invalid text.');
+          if (annotation.runs !== undefined && (!Array.isArray(annotation.runs) || annotation.runs.some(run => !run || typeof run.text !== 'string'
+              || (run.fontSize != null && (!Number.isFinite(run.fontSize) || run.fontSize <= 0))))) throw new Error('The project contains invalid text formatting.');
+          if (annotation.table) {
+            const table = annotation.table;
+            if (typeof table.id !== 'string' || !Number.isInteger(table.rows) || table.rows < 1 || table.rows > 10000
+                || !Number.isInteger(table.columns) || table.columns < 1 || table.columns > 100
+                || !Array.isArray(table.bounds) || table.bounds.length !== 4 || !table.bounds.every(Number.isFinite)) throw new Error('The project contains an invalid table.');
+            for (const [key, size, span] of [['row', 'rows', 'rowSpan'], ['column', 'columns', 'columnSpan']]) {
+              const length = table[span] ?? 1;
+              if (!Number.isInteger(table[key]) || table[key] < 0 || !Number.isInteger(length) || length < 1 || table[key] + length > table[size]) throw new Error('The project contains an invalid table cell.');
+            }
+          }
+          if (annotation.type === 'stroke' && (!Array.isArray(annotation.points) || !annotation.points.every(point => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)))) throw new Error('The project contains an invalid drawing.');
+        }
+        return { ...page, id: uid(), imageUrl: null, documentId: null, serverIndex: null,
+          annotations: page.annotations.map(annotation => ({ ...annotation, id: uid() })) };
+      });
+      await Promise.all(pages.map(page => new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => image.naturalWidth * image.naturalHeight > 25000000
+          ? reject(new Error('The project contains an oversized page image.')) : resolve();
+        image.onerror = () => reject(new Error('The project contains a damaged page image.'));
+        image.src = page.imageData;
+      })));
       state.name = data.name || file.name.replace(/\.pdfeditorathome$/i, '');
       state.documentId = null;
       state.sourceFormat = data.format;
-      state.pages = data.pages.map(page => ({
-        id: uid(), width: Number(page.width), height: Number(page.height),
-        imageData: page.imageData, imageUrl: null, documentId: null, serverIndex: null,
-        annotations: (page.annotations || []).map(annotation => ({ ...annotation, id: uid() })),
-      }));
+      state.pages = pages;
       state.selectedPage = 0;
       clearSelection();
       state.history = [];
@@ -1230,6 +1323,7 @@
       toast(error.message, 'error');
     } finally {
       hideBusy();
+      state.opening = false;
       elements.fileInput.value = '';
     }
   }
@@ -1263,9 +1357,10 @@
         if (!response.ok) throw new Error('A page image is no longer available. Reopen the source document.');
         imageData = await blobToDataUrl(await response.blob());
       }
-      pages.push({ width: page.width, height: page.height, imageData, annotations: page.annotations });
+      pages.push({ width: page.width, height: page.height, pointsPerPixel: page.pointsPerPixel,
+        pdfData: page.pdfData, imageData, annotations: page.annotations });
     }
-    const project = { format: projectFormat, version: 1, name: state.name, createdAt: new Date().toISOString(), pages };
+    const project = { format: projectFormat, version: 2, name: state.name, createdAt: new Date().toISOString(), pages };
     downloadBlob(new Blob([JSON.stringify(project)], { type: 'application/json' }), `${safeFilename(state.name)}.pdfeditorathome`);
   }
 
@@ -1291,6 +1386,7 @@
               width: page.width, height: page.height,
               documentId: page.documentId, serverIndex: page.serverIndex,
               imageData: page.imageData, annotations: page.annotations,
+              pointsPerPixel: page.pointsPerPixel, pdfData: page.pdfData,
             })),
           }),
         });
@@ -1300,7 +1396,7 @@
         }
         downloadBlob(await response.blob(), `${safeFilename(state.name)}.${format}`);
       }
-      setDirty(false);
+      if (format === projectFormat) setDirty(false);
       toast(`${format.toUpperCase()} exported`);
     } catch (error) {
       toast(error.message, 'error');
@@ -1335,6 +1431,7 @@
   elements.stage.addEventListener('pointerup', pointerUp);
   elements.stage.addEventListener('pointercancel', pointerUp);
   elements.stage.addEventListener('dblclick', event => {
+    if (event.target.closest?.('[contenteditable="true"], [contenteditable="plaintext-only"]')) return;
     const annotation = annotationFromTarget(event.target);
     if (annotation?.type === 'text') {
       setSelection([annotation.id], annotation.id);
@@ -1354,6 +1451,7 @@
     const badge = $('.selection-badge', element);
     if (badge) badge.remove();
     annotation.text = element.innerText;
+    delete annotation.runs;
     if (annotation.noWrap) {
       annotation.width = Math.ceil(measureTextAnnotation(annotation, annotation.text) + 2);
       annotation.height = Math.max(annotation.fontSize * 1.2, annotation.text.split('\n').length * annotation.fontSize * 1.15);
@@ -1423,14 +1521,14 @@
   });
 
   document.addEventListener('keydown', event => {
-    const editingText = event.target.closest?.('[contenteditable="true"]');
+    const editingText = event.target.closest?.('[contenteditable="true"], [contenteditable="plaintext-only"]');
     const editingInput = /INPUT|TEXTAREA|SELECT/.test(event.target.tagName);
     const modifier = event.ctrlKey || event.metaKey;
     if (modifier && event.key.toLowerCase() === 'o') { event.preventDefault(); elements.fileInput.click(); return; }
     if (modifier && event.key.toLowerCase() === 's') { event.preventDefault(); openExportDialog(); return; }
+    if (editingText || editingInput) return;
     if (modifier && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
     if (modifier && event.key.toLowerCase() === 'y') { event.preventDefault(); redo(); return; }
-    if (editingText || editingInput) return;
     if (modifier && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelectionOrPage(); return; }
     if (modifier && event.key.toLowerCase() === 'v') { event.preventDefault(); pasteClipboard(); return; }
     if (modifier && event.key.toLowerCase() === 'a') {

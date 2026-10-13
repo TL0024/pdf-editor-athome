@@ -105,7 +105,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .selection-resize-handle { position: absolute; top: -7px; right: -7px; width: 14px; height: 14px; padding: 0; border: 2px solid white; border-radius: 3px; background: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 2px 5px rgba(36,40,92,.22); cursor: nesw-resize; pointer-events: auto; }
 .text-annotation:hover { border-color: rgba(91,92,226,.35); }
 .text-annotation.selected { border: 1px solid var(--accent); box-shadow: 0 0 0 2px rgba(91,92,226,.14); }
-.text-annotation[contenteditable="true"] { cursor: text; user-select: text; background: rgba(255,255,255,.72); }
+.text-annotation[contenteditable="true"], .text-annotation[contenteditable="plaintext-only"] { cursor: text; user-select: text; background: rgba(255,255,255,.72); }
 .text-annotation.cover-underneath { background: white; }
 .selection-badge { position: absolute; top: -20px; left: -1px; padding: 2px 5px; color: white; background: var(--accent); border-radius: 3px 3px 0 0; font-size: 8px; letter-spacing: .04em; text-transform: uppercase; pointer-events: none; }
 .stage-select { cursor: default; }
