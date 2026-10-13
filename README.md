@@ -13,14 +13,15 @@ PDFeditorAthome is a local-first document editor for Windows. It opens PDF, DOCX
 - Hold Ctrl while resizing to preserve proportions.
 - Copy and paste selected objects or clone the current page when nothing is selected.
 - Add, duplicate, reorder and delete pages.
-- Export selectable PDF text and vector drawings.
+- Export selectable PDF text, vector drawings, and original PDF page sizes.
+- Export editable Word paragraphs, formatted runs, and detected tables.
 - Save editable `.pdfeditorathome` project files.
 
 ## Windows release
 
 Download the latest package from [GitHub Releases](https://github.com/TL0024/pdf-editor-athome/releases). Extract the ZIP and double-click `PDFeditorAthome.exe`; the editor opens in your default browser. Closing the last editor tab also stops the local server and closes its console window. You can still close the console directly to stop the app.
 
-The packaged application supports 64-bit Windows 10 and Windows 11 and does not require Python. The v1.0.1 executable is not Authenticode code-signed, so Windows may display an unknown-publisher warning. Verify the executable against the included `SHA256SUMS.txt` before running it.
+The packaged application supports 64-bit Windows 10 and Windows 11 and does not require Python. The v1.0.2 executable is not Authenticode code-signed, so Windows may display an unknown-publisher warning. Verify the executable against the included `SHA256SUMS.txt` before running it.
 
 ## Run from source
 
@@ -49,7 +50,9 @@ Alternatively, double-click `run.bat`. The editor is available at <http://127.0.
 
 Selectable PDF text and text from DOCX, TXT, Markdown and HTML files becomes editable text. Images, lines and other page artwork remain in the page layer. Image-only or scanned PDFs require OCR before their wording can be edited.
 
-PDF exports retain selectable text and vector drawings. DOCX and image exports preserve the visual page result. Save a `.pdfeditorathome` project when you want to continue editing its objects later.
+PDF exports retain selectable text, original PDF page sizes and vector artwork. DOCX exports contain editable paragraphs and native tables from DOCX, HTML and detected PDF grids. Pictures and drawings remain separate images; scanned wording requires OCR. Word reflows content, so complex layouts can differ from the PDF. PNG and JPG exports preserve the current page's visual result.
+
+Save a `.pdfeditorathome` project to continue editing later. Projects embed page previews and original PDF artwork and can be reopened after the server stops. Exporting PDF, Word or an image keeps the unsaved-project indicator active; saving the project clears it.
 
 ## Build the Windows release
 
@@ -59,7 +62,7 @@ Run:
 .\build_release.bat
 ```
 
-The script creates an isolated `.build-venv`, installs the pinned packages from `requirements-release.txt`, builds `PDFeditorAthome.exe`, creates a SHA-256 checksum and assembles `PDFeditorAthome-v1.0.1-windows-x64.zip` with its usage and third-party credits. Generated `build`, `dist` and `release` directories are ignored by git; compiled artifacts are distributed through GitHub Releases rather than committed to `main`.
+The script creates an isolated `.build-venv`, installs the pinned packages from `requirements-release.txt`, builds `PDFeditorAthome.exe`, creates a SHA-256 checksum and assembles `PDFeditorAthome-v1.0.2-windows-x64.zip` with its usage and third-party credits. Generated `build`, `dist` and `release` directories are ignored by git; compiled artifacts are distributed through GitHub Releases rather than committed to `main`.
 
 See [Building and releasing](docs/BUILDING.md) for the complete release procedure, [Static analysis and CI](docs/STATIC_ANALYSIS.md) for all automated checks, [Security policy](SECURITY.md) for vulnerability reporting, and [User guide](docs/USER_GUIDE.md) for usage details.
 
@@ -68,6 +71,7 @@ See [Building and releasing](docs/BUILDING.md) for the complete release procedur
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m pytest -q --cov=app --cov-branch --cov-report=term-missing
+node tests/test_editor.cjs
 ```
 
 Pull requests also run Ruff, Mypy, djLint, codespell, Vulture, pip-audit, Bandit, Semgrep, Zizmor, a three-version Python test matrix, and a clean Windows package smoke test.

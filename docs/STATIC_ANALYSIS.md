@@ -6,6 +6,7 @@ Every pull request and push to `main` runs two GitHub Actions workflows.
 
 - Pytest and branch coverage on Python 3.11, 3.12, and 3.13, with a 70% minimum.
 - Ruff linting and formatting checks.
+- Node editor behavior checks for history, text editing, imports, project restoration and exports.
 - Mypy static type analysis.
 - djLint HTML template linting.
 - codespell documentation and source checks.
@@ -31,6 +32,7 @@ python -m venv .security-venv
 .\.quality-venv\Scripts\python.exe -m pip install -r requirements-quality.txt
 .\.security-venv\Scripts\python.exe -m pip install -r requirements-security.txt
 .\.quality-venv\Scripts\python.exe -m pytest -q --cov=app --cov-branch --cov-report=term-missing
+node tests/test_editor.cjs
 .\.quality-venv\Scripts\ruff.exe check .
 .\.quality-venv\Scripts\ruff.exe format --check .
 .\.quality-venv\Scripts\mypy.exe app.py tests

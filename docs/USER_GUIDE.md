@@ -41,7 +41,7 @@ When no objects are selected, Ctrl+C copies the current page, Ctrl+V inserts its
 
 ## Editing text
 
-Double-click a text object to edit it. Use the properties panel to control its font, size, emphasis, color, opacity, alignment and background covering. Background covering is useful when replacing wording that is part of an image layer.
+Double-click a text object to edit it. Use the properties panel to control its size, bold emphasis, color, opacity and background covering. Background covering is useful when replacing wording that is part of an image layer; it is a visual cover and does not securely redact underlying content.
 
 ## Drawing
 
@@ -53,12 +53,14 @@ Use the left page panel to select and reorder pages. The page controls can add a
 
 ## Saving editable work
 
-Open **Export** and choose **PDFeditorAthome project** to download a `.pdfeditorathome` file. It preserves page images, editable text and drawing objects for a later session.
+Open **Export** and choose **PDFeditorAthome project** to download a `.pdfeditorathome` file. It preserves page images, original PDF vector artwork, page sizes, table structure, editable text and drawing objects for a later session. Version 1 projects remain supported; new projects use version 2.
+
+Exporting PDF, Word or a single image does not save the editor's project state. Save the project to clear **Unsaved changes**. Opening another file prompts before discarding unsaved work.
 
 ## Exporting
 
-- **PDF:** All pages with selectable text and vector strokes.
-- **DOCX:** All pages represented using their composed visual layout.
+- **PDF:** All pages with selectable text and vector strokes. Imported PDF page sizes and non-text vector artwork are retained.
+- **DOCX:** Editable paragraphs, styled text and native tables reconstructed from DOCX, HTML and detected PDF grids. Empty and merged Word cells are retained. Pictures and drawings are separate images. Word can reflow content, changing complex page layouts.
 - **PNG/JPG:** The current page.
 - **PDFeditorAthome project:** Editable project data for future work.
 
@@ -66,7 +68,10 @@ Open **Export** and choose **PDFeditorAthome project** to download a `.pdfeditor
 
 - OCR is not included.
 - Imported PDF text fidelity depends on the fonts and positioning data stored in the source PDF.
-- DOCX export prioritizes page appearance rather than reconstructing the original Word document structure.
+- PDF table detection works best with visible grid lines. Unrecognized tables remain editable text rather than native Word tables.
+- Rotated and angled PDF text remains in the original artwork layer to preserve its orientation; it cannot yet be edited directly.
+- Complex Word layouts, nested tables, headers, footers, footnotes and floating objects are not fully reconstructed.
+- OCR, interactive form editing, secure redaction and digital signing are not included. This application does not yet provide Adobe Acrobat feature parity.
 - Editing and re-exporting an already signed PDF does not preserve its original cryptographic signature.
 
 ## Release verification

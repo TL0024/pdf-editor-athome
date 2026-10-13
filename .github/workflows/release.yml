@@ -24,7 +24,9 @@ jobs:
       - name: Verify tag matches VERSION
         shell: pwsh
         run: |
-          $expected = "v$((Get-Content -LiteralPath VERSION -Raw).Trim())"
+          $version = (Get-Content -LiteralPath VERSION -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid package version." }
+          $expected = "v$version"
           if ($env:GITHUB_REF_NAME -ne $expected) {
             throw "Tag $env:GITHUB_REF_NAME does not match VERSION ($expected)."
           }
@@ -43,12 +45,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $version = (Get-Content -LiteralPath VERSION -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid package version." }
+          $releaseDirectory = "release/PDFeditorAthome-v$version-windows-x64"
           gh release create $env:GITHUB_REF_NAME `
             --repo $env:GITHUB_REPOSITORY `
             --target $env:GITHUB_SHA `
             --title "PDFeditorAthome $env:GITHUB_REF_NAME" `
             --notes-file packaging/RELEASE_NOTES.md `
             --latest `
-            release/PDFeditorAthome-v1.0.1-windows-x64/PDFeditorAthome.exe `
-            release/PDFeditorAthome-v1.0.1-windows-x64/SHA256SUMS.txt `
-            release/PDFeditorAthome-v1.0.1-windows-x64.zip
+            "$releaseDirectory/PDFeditorAthome.exe" `
+            "$releaseDirectory/SHA256SUMS.txt" `
+            "$releaseDirectory.zip"

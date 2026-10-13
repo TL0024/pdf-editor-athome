@@ -1,3 +1,17 @@
+# PDFeditorAthome v1.0.2
+
+- Word export now produces editable paragraphs, formatted runs and native tables instead of page screenshots.
+- DOCX tables retain empty cells and horizontal or vertical merges; grid tables in PDFs and tables in HTML are reconstructed.
+- DOCX pictures and text emphasis survive import and export.
+- PDF exports retain original page dimensions and non-text vector artwork.
+- Long text exports no longer disappear when their text box is too short; long imported paragraphs are paginated.
+- Fixes project validation, background cache expiry, redo loss on a click, editing badges, font resizing, single-point strokes and transparent images.
+- Version 2 projects embed PDF artwork and page scales and remain portable between sessions. Version 1 projects remain readable.
+- Exporting a single image or another output format no longer marks the editable project as saved.
+- Adds backend and JavaScript behavior regression tests.
+
+OCR, interactive form editing, secure redaction, digital signing and full Acrobat parity remain outside the implemented feature set. Rotated text is retained in the original artwork layer. Complex Word layouts can reflow.
+
 # PDFeditorAthome v1.0.1
 
 First public Windows release of the local-first PDF and document editor.

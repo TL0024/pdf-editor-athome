@@ -1,4 +1,4 @@
-PDFeditorAthome v1.0.1
+PDFeditorAthome v1.0.2
 ================================
 
 System requirements
@@ -22,9 +22,17 @@ processed locally and held in memory while the application is running.
 
 Windows warning
 ---------------
-This v1.0.1 executable is not Authenticode code-signed. Windows SmartScreen may
+This executable is not Authenticode code-signed. Windows SmartScreen may
 therefore display "Unknown publisher". Verify PDFeditorAthome.exe against the SHA-256
 value in SHA256SUMS.txt before running it.
+
+Export and save
+---------------
+Word exports contain editable paragraphs and detected native tables. Pictures,
+drawings and scanned wording remain images; OCR is not included. Complex Word
+layouts may reflow. PDF exports preserve original PDF page sizes and vector artwork.
+Save a .pdfeditorathome project to retain editable objects for the next session.
+Exporting PDF, Word or an image does not clear the unsaved-project indicator.
 
 Third-party credits
 -------------------
