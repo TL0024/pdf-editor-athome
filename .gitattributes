@@ -1,0 +1,2 @@
+# Match Ruff's LF policy even when Windows Git enables autocrlf.
+*.py text eol=lf
