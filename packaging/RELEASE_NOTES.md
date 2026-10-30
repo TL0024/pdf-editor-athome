@@ -1,5 +1,9 @@
 # PDFeditorAthome v1.0.2
 
+- Upgrade Pillow to 13.0 to satisfy the existing release dependency-security gate.
+
+- Verify Python 3.14 support and build the Windows release with Python 3.14.
+
 - Word export now produces editable paragraphs, formatted runs and native tables instead of page screenshots.
 - DOCX tables retain empty cells and horizontal or vertical merges; grid tables in PDFs and tables in HTML are reconstructed.
 - DOCX pictures and text emphasis survive import and export.

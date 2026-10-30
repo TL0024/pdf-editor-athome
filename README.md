@@ -1,5 +1,7 @@
 # PDFeditorAthome
 
+Python 3.14 is supported and used for Windows release builds; CI also retains Python 3.11, 3.12, and 3.13 coverage.
+
 [![Static analysis](https://github.com/TL0024/pdf-editor-athome/actions/workflows/static-analysis.yml/badge.svg)](https://github.com/TL0024/pdf-editor-athome/actions/workflows/static-analysis.yml)
 [![Windows package](https://github.com/TL0024/pdf-editor-athome/actions/workflows/windows-build.yml/badge.svg)](https://github.com/TL0024/pdf-editor-athome/actions/workflows/windows-build.yml)
 
